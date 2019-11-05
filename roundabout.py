@@ -8,9 +8,9 @@ dt = 0.05 # step size of the environment
 datDraw = 0.05 #step size for ploting
 
 # Roundabout size and parameters
-r = [45, 50]  # radius of the inner and outer lane
+r = [44, 50]  # radius of the inner and outer lane
 vMax = [40, 30]  # maximum speed of the inner and outer lane
-
+width = r[1] - r[0]
 
 # Car parameters
 a = 1.3
@@ -21,14 +21,15 @@ aMax = 2.778
 bMax = 7
 
 # Traffic
-carNum = 70
+carNum = 20
 spd = 20
-spdVar = 4
+spdVar = 10
 
 #IDM parameters
 delta = 3 # acceleration index .1~5 is ok
 safeGap = 2
 tao = 0.7 # reaction time for emergent brake
+maxCF = float("inf") # if the gap between ego car and front car is more than maxCF, then ego car will adopt max accelaration
 
 # s:state matrix,each columu is a state vector for a car.
 # vector is [theta, r, v, CFmode, targetExist]
@@ -44,8 +45,9 @@ class Roundabout:
         self.ax = self.fig.add_subplot(1, 1, 1)
         plt.ion()
 
-        self.drawRound(r[0])
-        self.drawRound(r[1])
+        self.drawRound(r[0] - width/2)
+        self.drawRound(r[1] - width/2)
+        self.drawRound(r[1] + width/2)
 
     def drawCar(self, s):
         sX = np.cos(s[0]) * s[1]
@@ -62,7 +64,7 @@ class Roundabout:
         self.ax.plot(x, y, c='black')
 
     def drawFollow(self, s, ard):
-        if len(self.ax.artists) > 1:
+        if len(self.ax.artists) > 0:
             for i in range(carNum):
                 self.ax.artists.pop(0)
 
@@ -111,7 +113,7 @@ class Cars:
             else:
                 sn = (self.s[0, j]-self.s[0, i])*self.s[1, i] - L
             print(sn)
-            if sn < 40:
+            if sn < maxCF:
                 vn = self.s[2, i]
                 vn1 = self.s[2, j]
                 vMaxn = vMax[self.s[1, i] == r[1]]
