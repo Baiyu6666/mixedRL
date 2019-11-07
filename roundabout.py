@@ -4,12 +4,12 @@ from math import pi
 from matplotlib.animation import FuncAnimation
 
 #Simulation
-dt = 0.05 # step size of the environment
-datDraw = 0.05 #step size for ploting
+dt = 1/6 # step size of the environment
+datDraw = 0.001 #step size for ploting
 
 # Roundabout size and parameters
-r = [44, 50]  # radius of the inner and outer lane
-vMax = [40, 30]  # maximum speed of the inner and outer lane
+r = [27.5, 34.5]  # radius of the inner and outer lane
+vMax = [40/3.6, 30/3.6]   # maximum speed of the inner and outer lane
 width = r[1] - r[0]
 
 # Car parameters
@@ -21,15 +21,15 @@ aMax = 2.778
 bMax = 7
 
 # Traffic
-carNum = 20
-spd = 20
-spdVar = 10
+carNum = 50
+spd = 15/3.6
+spdVar = 4
 
 #IDM parameters
-delta = 3 # acceleration index .1~5 is ok
+delta = 3  # acceleration index .1~5 is ok
 safeGap = 2
-tao = 0.7 # reaction time for emergent brake
-maxCF = float("inf") # if the gap between ego car and front car is more than maxCF, then ego car will adopt max accelaration
+tao = 0.7  # reaction time for emergent brake
+maxCF = 9999  # if the gap between ego car and front car is more than maxCF, then ego car will adopt max accelaration
 
 # s:state matrix,each columu is a state vector for a car.
 # vector is [theta, r, v, CFmode, targetExist]
@@ -45,29 +45,21 @@ class Roundabout:
         self.ax = self.fig.add_subplot(1, 1, 1)
         plt.ion()
 
-        self.drawRound(r[0] - width/2)
-        self.drawRound(r[1] - width/2)
-        self.drawRound(r[1] + width/2)
-
     def drawCar(self, s):
         sX = np.cos(s[0]) * s[1]
         sY = np.sin(s[0]) * s[1]
         self.ax.scatter(sX, sY, c='b', marker='s', s=100)  # 散点图
-        if len(self.ax.collections) > 1:
-            self.ax.collections.pop(0)
-        plt.pause(datDraw)
 
-    def drawRound(self, r):
-        x = np.arange(-r, r, 0.001)
-        y = np.sqrt(r**2 - x**2)
-        self.ax.plot(x, -y, c='black')
-        self.ax.plot(x, y, c='black')
+
+    def drawRound(self):
+        for rr in [r[0] - width/2, r[1] - width/2, r[1] + width/2]:
+            x = np.arange(-rr, rr, 0.001)
+            y = np.sqrt(rr**2 - x**2)
+            self.ax.plot(x, -y, c='black')
+            self.ax.plot(x, y, c='black')
+
 
     def drawFollow(self, s, ard):
-        if len(self.ax.artists) > 0:
-            for i in range(carNum):
-                self.ax.artists.pop(0)
-
         for i in range(carNum):
             j = ard[0, i]
             sX = np.cos(s[0]) * s[1]
@@ -76,13 +68,19 @@ class Roundabout:
                            length_includes_head=True,  # 增加的长度包含箭头部分
                            head_width=1, head_length=2, fc='r', ec='gray')
 
+
+    def drawdata(self, s, data):
+        for i in range(carNum):
+            self.ax.annotate(s=str(data[i]), xy=(np.cos(s[0]) * s[1], np.sin(s[0]) * s[1]))
+
+
 class Cars:
     def __init__(self):
         global carNum
         self.s = np.zeros([5, carNum])
         self.s[0] = np.random.rand(carNum) * 2 * pi
         self.s[1] = r[0] + (r[1] - r[0]) * np.random.randint(0, 2, carNum)
-        self.s[2] = np.random.normal(spd, spdVar, size=(1, carNum))
+        self.s[2] = abs(np.random.normal(spd, spdVar, size=(1, carNum)))
         self.s[-1] = np.random.randint(1, 5, carNum)
 
         overlap = []
@@ -112,17 +110,21 @@ class Cars:
                 sn = (self.s[0, j] - self.s[0, i] + 2*pi) * self.s[1, i] - L
             else:
                 sn = (self.s[0, j]-self.s[0, i])*self.s[1, i] - L
-            print(sn)
-            if sn < maxCF:
-                vn = self.s[2, i]
-                vn1 = self.s[2, j]
-                vMaxn = vMax[self.s[1, i] == r[1]]
-                EGap = safeGap + max(0, tao*vn+vn*(vn-vn1)/(2*np.sqrt(aMax*bMax)))
-                a[i] = aMax*(1 - (vn/vMaxn)**delta-(EGap/sn)**2)
-                a[i] = min(aMax,max(-bMax,a[i]))
 
-            else:
-                a[i] = aMax
+
+            vn = self.s[2, i]
+            vn1 = self.s[2, j]
+            vMaxn = vMax[self.s[1, i] == r[1]]
+            EGap = safeGap + max(0, tao*vn+vn*(vn-vn1)/(2*np.sqrt(aMax*bMax)))
+            a[i] = aMax*(1 - (vn/vMaxn)**delta-(EGap/sn)**2)
+            a[i] = min(aMax, max(-bMax, a[i]))
+            #a[i] += np.random.normal(0, 0.7)
+            rounda.ax.annotate(s=str(round(vn, 1)), xy=(np.cos(self.s[0, i]) * self.s[1, i]+2, np.sin(self.s[0, i]) * self.s[1, i]))
+            rounda.ax.annotate(s=str(round(a[i], 1)),
+                              xy=(np.cos(self.s[0, i]) * self.s[1, i], np.sin(self.s[0, i]) * self.s[1, i]+ 2))
+            rounda.ax.annotate(s=str(round(EGap, 1)),
+                               xy=(np.cos(self.s[0, i]) * self.s[1, i], np.sin(self.s[0, i]) * self.s[1, i] - 2))
+
         return a
 
     def around(self):
@@ -135,14 +137,17 @@ class Cars:
         return ard
 
 
-round = Roundabout()
+rounda = Roundabout()
 cars = Cars()
 for i in range(1000):
+    rounda.ax.cla()
     a = cars.idm()
     cars.dynamic(a)
-    round.drawCar(cars.s)
-    round.drawFollow(cars.s, cars.around())
 
+    rounda.drawRound()
+    rounda.drawCar(cars.s)
+    rounda.drawFollow(cars.s, cars.around())
+    plt.pause(datDraw)
 
 
 
